@@ -6,7 +6,7 @@
 
 | | Pretrain | SFT |
 |---|---|---|
-| 資料 | yunmo_pretrain_packed.bin (~4.27B tok) | yunmo_sft_ids.bin + mask.bin (~5.85B tok) |
+| 資料 | yunmo_pretrain_packed.bin (2.35B tok / 229.8萬塊) | yunmo_sft_ids.bin + mask.bin (3.87B tok / 189.2萬塊) |
 | 載入 | **packing**（零 pad） | **packing + loss-mask**（零 pad，長對話跨塊保留） |
 | seq_len | 1024 | 2048 |
 | batch / accum | 128 / 8 | 64 / 8 |
