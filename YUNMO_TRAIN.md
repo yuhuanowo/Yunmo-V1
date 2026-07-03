@@ -1,12 +1,12 @@
 # Yunmo v1 訓練手冊（PRO 6000 · 36h · pretrain+SFT）
 
-繁體台灣特化 · 基於 MiniMind v3 增量復現 · ~185M
+繁體台灣特化 · 基於 MiniMind v3 增量復現 · ~195M
 
 ## 鎖定設定
 
 | | Pretrain | SFT |
 |---|---|---|
-| 資料 | yunmo_pretrain_packed.bin (~3B tok) | yunmo_sft_ids.bin + mask.bin (~4.9B tok) |
+| 資料 | yunmo_pretrain_packed.bin (~4.27B tok) | yunmo_sft_ids.bin + mask.bin (~5.85B tok) |
 | 載入 | **packing**（零 pad） | **packing + loss-mask**（零 pad，長對話跨塊保留） |
 | seq_len | 1024 | 2048 |
 | batch / accum | 128 / 8 | 64 / 8 |
@@ -14,7 +14,7 @@
 | epochs 上限 | 6（由 --max_minutes 時間封頂決定實際量） | 6 |
 | 時間封頂 | ~900 min | ~1080 min |
 
-模型：hidden 768 / **layers 24** / heads 8 / kv 4 / vocab 24000 / QK-Norm / tied-emb（~185M）
+模型：hidden 768 / **layers 24** / heads 8 / kv 4 / vocab 24000 / QK-Norm / tied-emb（~195M）
 共通：AdamW · bf16 · grad_clip 1.0 · cos schedule(峰=lr/底=lr/10/無warmup) · from_resume 斷點續訓
 分工：**pretrain+SFT 在 PRO 6000**；DPO/RL 之後本地 4070Ti。
 
