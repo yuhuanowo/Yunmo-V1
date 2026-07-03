@@ -8,3 +8,5 @@ docs-minimind/
 dataset/*.bin
 dataset/yunmo_pack_meta.json
 checkpoints/
+wandb/
+trainer/wandb/
