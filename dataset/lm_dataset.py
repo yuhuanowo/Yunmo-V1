@@ -3,6 +3,7 @@ import torch
 import json
 import os
 import random
+import numpy as np
 from datasets import load_dataset, Features, Sequence, Value
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -117,6 +118,49 @@ class SFTDataset(Dataset):
         #     print(f"{i:3d}: X={self.tokenizer.decode([x])!r:16s} ---> Y={self.tokenizer.decode([input_ids[i+1]])!r:16s} label={y}")
         # # ================
         return torch.tensor(input_ids, dtype=torch.long), torch.tensor(labels, dtype=torch.long)
+
+
+class PackedPretrainDataset(Dataset):
+    """Yunmo：讀預打包 token 二進位（uint16 連續流），切成 max_length 塊。零 pad、全 token 訓練。
+    由 scripts/pack_yunmo_data.py 產生：每篇 [bos]+text+[eos] 拼接成連續流。"""
+    def __init__(self, bin_path, tokenizer, max_length=1024):
+        super().__init__()
+        self.data = np.memmap(bin_path, dtype=np.uint16, mode='r')
+        self.max_length = max_length
+        self.n = len(self.data) // max_length
+
+    def __len__(self):
+        return self.n
+
+    def __getitem__(self, index):
+        s = index * self.max_length
+        ids = np.asarray(self.data[s:s + self.max_length], dtype=np.int64)
+        input_ids = torch.from_numpy(ids)
+        labels = input_ids.clone()   # pretrain 全 token 訓練（model 內部 shift）
+        return input_ids, labels
+
+
+class PackedSFTDataset(Dataset):
+    """Yunmo：讀預打包的 ids + loss-mask（連續流），切成 max_length 塊。零 pad、長對話跨塊保留。
+    mask=1 標記 assistant token 位置（與 MiniMind generate_labels 對齊）；labels 非 assistant 處 = -100。"""
+    def __init__(self, ids_path, mask_path, tokenizer, max_length=2048):
+        super().__init__()
+        self.ids = np.memmap(ids_path, dtype=np.uint16, mode='r')
+        self.mask = np.memmap(mask_path, dtype=np.uint8, mode='r')
+        self.max_length = max_length
+        self.n = len(self.ids) // max_length
+
+    def __len__(self):
+        return self.n
+
+    def __getitem__(self, index):
+        s = index * self.max_length
+        ids = np.asarray(self.ids[s:s + self.max_length], dtype=np.int64)
+        m = np.asarray(self.mask[s:s + self.max_length], dtype=bool)
+        input_ids = torch.from_numpy(ids)
+        labels = input_ids.clone()
+        labels[~torch.from_numpy(m)] = -100   # 只在 assistant 區間算 loss
+        return input_ids, labels
 
 
 class DPODataset(Dataset):

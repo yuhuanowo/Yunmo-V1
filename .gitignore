@@ -4,3 +4,7 @@ __pycache__/
 out
 website/
 docs-minimind/
+# Yunmo v1 大檔（本地打包/上傳，不進 git）
+dataset/*.bin
+dataset/yunmo_pack_meta.json
+checkpoints/
