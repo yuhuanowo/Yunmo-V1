@@ -113,11 +113,12 @@ MiniMindConfig(
 
 | 檔案 | 記錄數 | 打包 token | 打包區塊 | 磁碟（bin） |
 |---|---|---|---|---|
-| `pretrain.jsonl` | **12,157,237** | **2,353,402,018**（2.35B） | 2,298,244 × 1024 | 4.71 GB |
+| `pretrain_clean.jsonl`† | **12,157,237** | **2,353,430,714**（2.35B） | 2,298,272 × 1024 | 4.71 GB |
 | `sft_clean.jsonl`※ | **5,811,531** | **3,857,469,341**（3.857B） | 1,883,529 × 2048 | 11.6 GB（ids 7.71 + mask 3.86） |
 | 合計 unique | | **~6.21B** | | ~16.3 GB |
 
-> ※ **SFT 由污染清理後的 `sft_clean.jsonl` 打包**（見 §4.7）。原始 `sft.jsonl` 5,816,011 筆 → 丟 4,480 筆「無任何有效 assistant 回覆」殘缺記錄 → **5,811,531**；身份自稱句改寫為 Yunmo、tool_calls 補轉繁。token 較原始打包 3.875B 少 0.44%（長老師自介句換成較短 Yunmo 句）。**pretrain 稽核為乾淨（0 殘簡、0 身份污染），未受影響、未重打包。**
+> ※ **SFT 由污染清理後的 `sft_clean.jsonl` 打包**（見 §4.7）。原始 `sft.jsonl` 5,816,011 筆 → 丟 4,480 筆「無任何有效 assistant 回覆」殘缺記錄 → **5,811,531**；身份自稱句改寫為 Yunmo、tool_calls 補轉繁。token 較原始打包 3.875B 少 0.44%（長老師自介句換成較短 Yunmo 句）。
+> † **pretrain 亦經身份清理並重打包**（見 §4.7）：原始 `pretrain.jsonl` 全掃發現 1,074 筆老師「我是 X」自稱 + 542 筆 refusal 型（0 殘簡、0 minimind），改寫為 Yunmo（不刪記錄），輸出 `pretrain_clean.jsonl`；token 由 2,353,402,018 微增至 2,353,430,714（+0.001%，注入 3,173 句 Yunmo 所致）。
 
 ### 4.2 血緣組成（只增不減）
 
@@ -205,7 +206,7 @@ MiniMindConfig(
 
 - **殘留 16 筆**為異質性長尾（罕見措辭：「由阿里雲**提供**支援」、「我是使用 OpenAI 資料集**訓練**的」、「AI 語言模型**（Qwen）**」括號式等）；再追則 FP 風險上升，**故誠實報告殘留率 0.0003%，不宣稱歸零**。
 - **可復現性**：清理**每次從未修改的原始 `sft.jsonl` 重跑**（`SRC=sft.jsonl` → `OUT=sft_clean.jsonl` 全覆蓋），非累積式；體積僅縮 0.047%（15.70→15.69 GB），證明為外科手術式改寫而非大量刪除。原始 `sft.jsonl` 修改時間停在建置日、從未被動。
-- **pretrain 不需清理**：稽核 0 殘簡、無 minimind、老師名僅為維基條目式知識提及（非自稱），故 pretrain bin 保持原打包。
+- **pretrain 亦需清理（開訓前驗證修正之前的錯誤假設）**：初判「pretrain 僅知識提及非自稱」經全掃**證偽**——實有 1,074 筆「我是 ChatGPT／文心一言…」自稱 + 542 筆 refusal 型（0 殘簡、0 minimind）。以同一 `clean_content` 邏輯清理（`clean_pretrain.py`，複用 SFT 身份規則），改寫為 Yunmo（不刪記錄）→ **老師自稱 1,074→80、refusal 542→0、注入 Yunmo 3,173**。殘留 80（0.00066%）為異質長尾與角色扮演（如「銷售員 ChatGPT」），如實揭露不宣稱歸零；pretrain 為無監督文本、身份信號弱，最終身份由 SFT 主導。
 - **tokenizer 不需重訓**：污染在資料內容非詞表，重打包即可。
 
 ### 4.8 打包後端到端驗證（水質檢查，非僅管線機制）
@@ -248,7 +249,7 @@ MiniMindConfig(
 
 - **pretrain**：每 doc `[bos] + tokenize(text) + [eos]` → 連續 uint16 串流 `yunmo_pretrain_packed.bin`；`PackedPretrainDataset` 切 1024 塊，`labels = input_ids.clone()`（全 token 訓練，模型內部移位）。
 - **SFT**：`pre_processing_chat`（20% 注入 system prompt，**已修為繁體 + Yunmo/中性 10 條**）→ `apply_chat_template(tools=...)` → `post_processing_chat`（80% 移空 think）→ tokenize → **assistant-only loss mask**。mask 演算法掃描 `<|im_start|>assistant\n`(bos_id) 起、至 `<|im_end|>\n`(eos_id) 止，**mask=1 涵蓋 assistant 內容含結尾 `<|im_end|>\n`、排除 `<|im_start|>assistant\n` 表頭與所有 user/system**（§4.8 已解碼實證）。輸出 `yunmo_sft_ids.bin`(uint16) + `yunmo_sft_mask.bin`(uint8)；`PackedSFTDataset` 以 `labels[~mask]=-100` 只監督 assistant。**輸入為 `sft_clean.jsonl`（污染清理後）。**
-- **重打包範圍**：污染清理後**僅重打包 SFT**（`--stage sft --sft_in F:/AI/data/yunmo/sft_clean.jsonl`）；pretrain bin 未動。
+- **重打包範圍**：污染清理後**兩階段皆重打包**——SFT（`--stage sft --sft_in …/sft_clean.jsonl`）與 pretrain（`--stage pretrain --pretrain_in …/pretrain_clean.jsonl`）。
 
 ### 5.3 算力預算與曝光
 
@@ -274,7 +275,7 @@ MiniMindConfig(
 - **指標**：loss / logits_loss / aux_loss / **grad_norm**（發散預警）/ learning_rate / **tok_per_sec** / progress / tokens_seen / elapsed_min；GPU 使用率/顯存/功耗/溫度（自動）。
 - **Config**：全超參 + 參數量 + vocab + **git_sha** + 資料塊數/token（機器回收後可完整重現）。
 - **模型保全**：雲端機器用後回收 → 中途 checkpoint 每 90 分（`CKPT_MIN`）上傳 wandb artifact，**時間制（非步數）→ 儲存可預測**，只留最近 2 版（`CKPT_KEEP`，~2×408MB），prune 於 **daemon 執行緒 → 不阻塞訓練**；階段結束自動上傳 `pretrain_768` / `full_sft_768`。
-- **環境釘版**：`transformers==4.57.6`、`trl==0.13.0`、**`huggingface_hub[hf_transfer]<1.0`**（hub 1.x 破 transformers 4.57 import）。repo `github.com/yuhuanowo/minimind`(master)；packed bin 經私有 HF dataset `yuhuanowo/yunmo-v1-packed` 中轉（**~16.3 GB**）。**污染清理後只需重傳 2 個 SFT bin（ids+mask）+ meta，pretrain bin 未動不必重傳。**
+- **環境釘版**：`transformers==4.57.6`、`trl==0.13.0`、**`huggingface_hub[hf_transfer]<1.0`**（hub 1.x 破 transformers 4.57 import）。repo `github.com/yuhuanowo/minimind`(master)；packed bin 經私有 HF dataset `yuhuanowo/yunmo-v1-packed` 中轉（**~16.3 GB**）。**污染清理後 pretrain 與 SFT bin 均已更新，3 個 bin（pretrain + sft ids/mask）+ meta 皆須重傳。**
 
 ---
 
