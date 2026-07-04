@@ -9,6 +9,8 @@ set -e
 PRETRAIN_MIN=${PRETRAIN_MIN:-900}          # pretrain 時間上限（分）
 SFT_MIN=${SFT_MIN:-1080}                    # SFT 時間上限（分）
 WANDB_PROJECT=${WANDB_PROJECT:-yunmo-v1}
+CKPT_MIN=${CKPT_MIN:-90}                    # 每N分鐘上傳中途checkpoint到wandb（防機器回收）
+CKPT_KEEP=${CKPT_KEEP:-2}                   # wandb只留最近N版中途checkpoint（防儲存爆）
 EXTRA_PRE=${EXTRA_PRE:-}                    # 額外參數，如 EXTRA_PRE="--batch_size 192"
 EXTRA_SFT=${EXTRA_SFT:-}
 
@@ -27,13 +29,15 @@ echo ""
 echo "========== [1/2] PRETRAIN  (上限 ${PRETRAIN_MIN} 分) =========="
 python train_pretrain.py \
   --max_minutes "$PRETRAIN_MIN" --from_resume 1 \
-  --use_wandb --wandb_project "$WANDB_PROJECT" $EXTRA_PRE
+  --use_wandb --wandb_project "$WANDB_PROJECT" \
+  --wandb_ckpt_minutes "$CKPT_MIN" --wandb_ckpt_keep "$CKPT_KEEP" $EXTRA_PRE
 
 echo ""
 echo "========== [2/2] SFT  (上限 ${SFT_MIN} 分, 接 pretrain 權重) =========="
 python train_full_sft.py \
   --max_minutes "$SFT_MIN" --from_weight pretrain --from_resume 1 \
-  --use_wandb --wandb_project "$WANDB_PROJECT" $EXTRA_SFT
+  --use_wandb --wandb_project "$WANDB_PROJECT" \
+  --wandb_ckpt_minutes "$CKPT_MIN" --wandb_ckpt_keep "$CKPT_KEEP" $EXTRA_SFT
 
 echo ""
 echo "========== ✅ 完成 =========="
