@@ -190,7 +190,15 @@ if __name__ == "__main__":
     device_type = "cuda" if "cuda" in args.device else "cpu"
     dtype = torch.bfloat16 if args.dtype == "bfloat16" else torch.float16
     autocast_ctx = nullcontext() if device_type == "cpu" else torch.cuda.amp.autocast(dtype=dtype)
-    
+    # 强制高效 SDPA 后端：关掉 math backend，避免其 materialize O(T^2) 的 attention scores 撑爆 VRAM。
+    # 背景：head_dim=96 + 部分新卡上，SDPA 预设 dispatcher 会退回 math backend；flash / mem-efficient
+    # 实测可用且是 O(T) 显存，禁用 math 后即强制走高效路径。cudnn backend 在 torch 2.12 有小 bug，一并关闭。
+    if device_type == "cuda":
+        for _fn, _on in [("enable_flash_sdp", True), ("enable_mem_efficient_sdp", True),
+                         ("enable_math_sdp", False), ("enable_cudnn_sdp", False)]:
+            if hasattr(torch.backends.cuda, _fn):
+                getattr(torch.backends.cuda, _fn)(_on)
+
     # ========== 4. 配wandb ==========
     wandb = None
     if args.use_wandb and is_main_process():
