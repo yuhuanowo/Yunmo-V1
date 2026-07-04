@@ -275,7 +275,7 @@ MiniMindConfig(
 - **指標**：loss / logits_loss / aux_loss / **grad_norm**（發散預警）/ learning_rate / **tok_per_sec** / progress / tokens_seen / elapsed_min；GPU 使用率/顯存/功耗/溫度（自動）。
 - **Config**：全超參 + 參數量 + vocab + **git_sha** + 資料塊數/token（機器回收後可完整重現）。
 - **模型保全**：雲端機器用後回收 → 中途 checkpoint 每 90 分（`CKPT_MIN`）上傳 wandb artifact，**時間制（非步數）→ 儲存可預測**，只留最近 2 版（`CKPT_KEEP`，~2×408MB），prune 於 **daemon 執行緒 → 不阻塞訓練**；階段結束自動上傳 `pretrain_768` / `full_sft_768`。
-- **環境釘版**：`transformers==4.57.6`、`trl==0.13.0`、**`huggingface_hub[hf_transfer]<1.0`**（hub 1.x 破 transformers 4.57 import）。repo `github.com/yuhuanowo/minimind`(master)；packed bin 經私有 HF dataset `yuhuanowo/yunmo-v1-packed` 中轉（**~16.3 GB**）。**污染清理後 pretrain 與 SFT bin 均已更新，3 個 bin（pretrain + sft ids/mask）+ meta 皆須重傳。**
+- **環境釘版**：`transformers==4.57.6`、`trl==0.13.0`、**`huggingface_hub[hf_transfer]<1.0`**（hub 1.x 破 transformers 4.57 import）。repo `github.com/yuhuanowo/minimind`(master)；packed bin 經私有 HF dataset `yuhuanstudio/yunmo-v1-packed` 中轉（**~16.3 GB**）。**污染清理後 pretrain 與 SFT bin 均已更新，3 個 bin（pretrain + sft ids/mask）+ meta 皆須重傳。**
 
 ---
 
@@ -306,7 +306,7 @@ RL 資料由 SFT 資料衍生（末個 assistant 留空供 rollout）。**若 RL
 | 項目 | 值 |
 |---|---|
 | Repo / branch | github.com/yuhuanowo/minimind / master |
-| 資料中轉 | HF dataset `yuhuanowo/yunmo-v1-packed`（private，~16.3 GB） |
+| 資料中轉 | HF dataset `yuhuanstudio/yunmo-v1-packed`（private，~16.3 GB） |
 | seed | 42（+ rank 偏移） |
 | 每 run 記錄 | git_sha + 全超參（wandb config） |
 | tokenizer | `./model`，24000 vocab / 23,708 merges / 36 special（解碼實證） |

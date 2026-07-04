@@ -6,7 +6,7 @@
 
 | | Pretrain | SFT |
 |---|---|---|
-| 資料 | yunmo_pretrain_packed.bin (2.35B tok / 229.8萬塊) | yunmo_sft_ids.bin + mask.bin (3.87B tok / 189.2萬塊) |
+| 資料 | yunmo_pretrain_packed.bin (2.353B tok / 229.83萬塊) | yunmo_sft_ids.bin + mask.bin (3.857B tok / 188.35萬塊) |
 | 載入 | **packing**（零 pad） | **packing + loss-mask**（零 pad，長對話跨塊保留） |
 | seq_len | 1024 | 2048 |
 | batch / accum | 128 / 8 | 64 / 8 |
@@ -31,7 +31,9 @@ python scripts/pack_yunmo_data.py --stage both \
   --out_dir     ./dataset --workers 16
 ```
 
-產出 `dataset/`：`yunmo_pretrain_packed.bin`、`yunmo_sft_ids.bin`、`yunmo_sft_mask.bin`、`yunmo_pack_meta.json`（共 ~15.2GB）。
+產出 `dataset/`：`yunmo_pretrain_packed.bin`、`yunmo_sft_ids.bin`、`yunmo_sft_mask.bin`、`yunmo_pack_meta.json`（共 ~16.3GB）。
+
+> **注意（v1 定案流程）**：打包前先跑身份去污染 `python script/clean_sft.py` 與 `python script/clean_pretrain.py`（見 YUNMO_SPEC §4.7），再以 `--pretrain_in …/pretrain_clean.jsonl --sft_in …/sft_clean.jsonl` 打包。上方指令為原始流程，實際 v1 bin 由 `*_clean.jsonl` 產出。
 
 ### Step 1.5｜透過 HuggingFace 中轉 bin（大檔上傳最穩，斷點續傳）
 
@@ -42,10 +44,10 @@ $env:HF_HUB_ENABLE_HF_TRANSFER = "1"      # 加速大檔
 hf auth login                              # 貼 write token（huggingface.co/settings/tokens）
 hf repo create yunmo-v1-packed --repo-type dataset --private
 cd F:\AI\minimind\dataset
-hf upload yuhuanowo/yunmo-v1-packed yunmo_pretrain_packed.bin --repo-type dataset
-hf upload yuhuanowo/yunmo-v1-packed yunmo_sft_ids.bin        --repo-type dataset
-hf upload yuhuanowo/yunmo-v1-packed yunmo_sft_mask.bin       --repo-type dataset
-hf upload yuhuanowo/yunmo-v1-packed yunmo_pack_meta.json     --repo-type dataset
+hf upload yuhuanstudio/yunmo-v1-packed yunmo_pretrain_packed.bin --repo-type dataset
+hf upload yuhuanstudio/yunmo-v1-packed yunmo_sft_ids.bin        --repo-type dataset
+hf upload yuhuanstudio/yunmo-v1-packed yunmo_sft_mask.bin       --repo-type dataset
+hf upload yuhuanstudio/yunmo-v1-packed yunmo_pack_meta.json     --repo-type dataset
 ```
 > 中斷就重跑同一行 —— Xet 會跳過已傳分塊、只補剩下的。
 
@@ -61,7 +63,7 @@ pip install "transformers==4.57.6" "trl==0.13.0" datasets accelerate tiktoken ji
 # 從 HuggingFace 拉回 Step1.5 上傳的 bin 到 minimind/dataset/
 export HF_HUB_ENABLE_HF_TRANSFER=1
 hf auth login          # 貼 token（read 即可）
-hf download yuhuanowo/yunmo-v1-packed --repo-type dataset --local-dir dataset
+hf download yuhuanstudio/yunmo-v1-packed --repo-type dataset --local-dir dataset
 python -c "import torch;print(torch.cuda.get_device_name(0), torch.cuda.is_bf16_supported())"
 ```
 
