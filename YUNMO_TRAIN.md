@@ -31,7 +31,23 @@ python scripts/pack_yunmo_data.py --stage both \
   --out_dir     ./dataset --workers 16
 ```
 
-產出 `dataset/`：`yunmo_pretrain_packed.bin`、`yunmo_sft_ids.bin`、`yunmo_sft_mask.bin`、`yunmo_pack_meta.json`。
+產出 `dataset/`：`yunmo_pretrain_packed.bin`、`yunmo_sft_ids.bin`、`yunmo_sft_mask.bin`、`yunmo_pack_meta.json`（共 ~15.2GB）。
+
+### Step 1.5｜透過 HuggingFace 中轉 bin（大檔上傳最穩，斷點續傳）
+
+本地上傳（Windows PowerShell）：
+```powershell
+pip install -U "huggingface_hub[hf_transfer]"
+$env:HF_HUB_ENABLE_HF_TRANSFER = "1"      # 加速大檔
+hf auth login                              # 貼 write token（huggingface.co/settings/tokens）
+hf repo create yunmo-v1-packed --repo-type dataset --private
+cd F:\AI\minimind\dataset
+hf upload yuhuanowo/yunmo-v1-packed yunmo_pretrain_packed.bin --repo-type dataset
+hf upload yuhuanowo/yunmo-v1-packed yunmo_sft_ids.bin        --repo-type dataset
+hf upload yuhuanowo/yunmo-v1-packed yunmo_sft_mask.bin       --repo-type dataset
+hf upload yuhuanowo/yunmo-v1-packed yunmo_pack_meta.json     --repo-type dataset
+```
+> 中斷就重跑同一行 —— Xet 會跳過已傳分塊、只補剩下的。
 
 ## Step 2｜雲端環境（RTX PRO 6000 = Blackwell，需 CUDA 12.8+）
 
@@ -40,8 +56,11 @@ git clone https://github.com/yuhuanowo/minimind.git && cd minimind
 # Blackwell(sm_120) 需 cu128 torch（cu126 會 no-kernel-image）
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 pip install "transformers==4.57.6" "trl==0.13.0" datasets accelerate tiktoken jinja2 \
-            einops rich psutil ujson jsonlines nltk numpy
-# 上傳 Step1 的 3 個 .bin 到 minimind/dataset/
+            einops rich psutil ujson jsonlines nltk numpy wandb "huggingface_hub[hf_transfer]"
+# 從 HuggingFace 拉回 Step1.5 上傳的 bin 到 minimind/dataset/
+export HF_HUB_ENABLE_HF_TRANSFER=1
+hf auth login          # 貼 token（read 即可）
+hf download yuhuanowo/yunmo-v1-packed --repo-type dataset --local-dir dataset
 python -c "import torch;print(torch.cuda.get_device_name(0), torch.cuda.is_bf16_supported())"
 ```
 
