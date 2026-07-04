@@ -108,9 +108,11 @@ MiniMindConfig(
 
 | 檔案 | 記錄數 | 打包 token | 打包區塊 | 磁碟 |
 |---|---|---|---|---|
-| `pretrain.jsonl` | **12,157,237** | **2,353,402,018**（2.35B） | 2,298,244 × 1024 | ~10–11 GB |
-| `sft.jsonl` | **5,816,011** | **3,874,644,587**（3.87B） | 1,891,916 × 2048 | ~15 GB |
-| 合計 unique | | **~6.22B** | | |
+| `pretrain.jsonl` | **12,157,237** | **2,353,402,018**（2.35B） | 2,298,244 × 1024 | 4.71 GB |
+| `sft_clean.jsonl`※ | **5,811,531** | **3,857,469,341**（3.857B） | 1,883,529 × 2048 | 11.6 GB（ids 7.19 + mask 3.59） |
+| 合計 unique | | **~6.21B** | | |
+
+> ※ **SFT 由污染清理後的 `sft_clean.jsonl` 打包**（見 §4.7）。原始 `sft.jsonl` 5,816,011 筆 → 丟 4,480 筆「無任何有效 assistant 回覆」殘缺記錄 → **5,811,531**；身份自稱句改寫為 Yunmo、tool_calls 補轉繁。token 較原始 3.875B 少 0.44%（長老師自介句換成較短 Yunmo 句）。**pretrain 稽核為乾淨（0 殘簡、0 身份污染），未受影響、未重打包。**
 
 ### 4.2 血緣組成（只增不減）
 
@@ -136,9 +138,9 @@ MiniMindConfig(
    - `assemble` `norm_r1`：`if not inp or not ans: return None`（distill_r1 因此 110,000→**109,999**）；`norm_messages`：`if not msgs: return None`。
    - `pack_sft_batch`：`except Exception: continue` — **靜默丟棄任何套 chat template/tokenize 出錯的對話**。
    - **pretrain 路徑則為乾淨 1:1**（僅跳空行/壞 JSON）。
-3. **tool_calls / tools 欄位不轉繁**（保留原 JSON 避免破壞結構）→ 工具參數內若含簡體會殘留。
+3. ~~**tool_calls / tools 欄位不轉繁**→ 工具參數內若含簡體會殘留。~~ **【v1 已修復，見 §4.7】** 原 MiniMind 管線不轉 tool_calls，實測 **217,783 筆**工具參數殘留簡體；清理階段對 tool_calls/tools 的中文字串做遞迴 s2twp → **殘簡歸零**。
 4. **HAN 轉換閘只涵蓋 U+4E00–9FFF**（不含 CJK Ext-A/B、相容表意字）→ 極少數罕字略過轉換。
-5. **SFT 打包時 20% 機率注入 system prompt**（來自雙語池、含 MiniMind 身份，且部分為簡體）→ 對繁體品牌模型為**潛在污染源**，須揭露；另 80% 機率移除空 `<think>\n\n</think>\n\n` 區塊。
+5. **SFT 打包時 20% 機率注入 system prompt** → 原 MiniMind 的 10 條 pool **4 條含 minimind 身份、5 條為簡體**，對繁體品牌模型為污染源。**【v1 已修復】** `dataset/lm_dataset.py` 的 `SYSTEM_PROMPTS` 已全數改為繁體、身份改為 Yunmo/中性（見 §4.7），重打包時生效；另 80% 機率移除空 `<think>\n\n</think>\n\n` 區塊（不變）。
 
 ### 4.4 轉繁方法與品質
 
@@ -159,6 +161,39 @@ MiniMindConfig(
 
 - pretrain_t2t：p50 269 / p90 564 / p95 651 / p99 815 / max 1459 tok（vocab6400 量）→ **512 會截半，故用 ≥1024**。
 - SFT 呈**雙峰**：指令短（tw-instruct p90≈615），推理超長（**distill_r1 p99≈7719、max≈26000**；qwen235b p99≈3370）；code p90≈3500。打包時巨型記錄（實測有 89,499、377,025 token 者）**不截斷、跨多塊保留**。
+
+### 4.7 身份污染稽核與清理（策略 C：中性化 + 注入一致 Yunmo 身份）
+
+> **動機**：MiniMind SFT 語料源自多老師蒸餾（minimind/DeepSeek-R1/通義千問-Qwen/ChatGPT-OpenAI 等），大量 assistant 回覆**自稱為這些老師模型**。若直接訓練，Yunmo 會產生**身份混亂**（問「你是誰」時自稱 Qwen/DeepSeek）。這是繁體品牌小模型不可接受的污染。GPU 訓練前的大範圍稽核發現此問題，於**開訓前**修復（腳本 `data/script/clean_sft.py`，複製於 `scripts/clean_sft.py`）。
+
+**A. 稽核發現（原始 `sft.jsonl` 5,816,011 筆全掃）**
+| 污染類型 | 量級 |
+|---|---|
+| minimind 身份自稱 | 63,139 |
+| jingyaogong（MiniMind 作者）身份 | 3,845 |
+| Qwen/DeepSeek/ChatGPT/OpenAI 等老師自稱 | 數千（多語序） |
+| tool_calls/tools 參數殘留簡體 | 217,783 |
+| 無任何有效 assistant 回覆的殘缺記錄 | 4,480 |
+
+**B. 清理原則（策略 C）—— 只中性化「真·自稱」，絕不動討論/事實/角色扮演**
+- **改寫**：assistant/system 中「我＝某老師模型」的自稱句 → 統一 canonical 身份句 **「我是 Yunmo，一個由 YuhuanStudio 開發的繁體中文小型語言模型。」**（保留句首問候與句子其餘內容）。
+- **保留（關鍵）**：老師名的**知識性討論**（「Qwen 是阿里巴巴開發的模型」）、**角色扮演**（「如果我是阿里巴巴 CEO」「我叫馬雲」「我是主持人 ChatGPT」）、**語氣詞**（「我是說…」）、**事實**（「OpenAI 開發的 ChatGPT」）一律**不動**——避免破壞世界知識與指令多樣性。
+- **偵測法**：以「第一人稱繫詞（我是/我，X，/我由…）＋ 開發者/模型名 ＋ 開發動詞（研發/開發/訓練/建立/推出…）」錨定自稱；並排除 `如果我/我認為/我使用/扮演/…` 等討論語境（人工判讀 45+ 代表樣本 + 對抗性測試迭代收斂）。
+- **特例**：refusal 模板「作為由 OpenAI 開發的 AI 語言模型，我無法…」採**子句替換**（只換身份子句，保留拒答內容）；minimind/jingyaogong 因非真實世界主題採全域安全替換；tool_calls 中文字串遞迴 s2twp 補轉繁。
+- **只增不減例外**：僅丟棄 4,480 筆**無有效 assistant 回覆**的殘缺記錄（非品質過濾，屬結構性清理）；身份清理是**改寫**不刪記錄。
+
+**C. 清理後複驗（`sft_clean.jsonl` 5,811,531 筆全掃）**
+| 指標 | 清理前 → 後 |
+|---|---|
+| minimind / jingyaogong | 66,984 → **0** |
+| tool_calls 殘簡 | 217,783 → **0** |
+| 真·自稱殘留（廣義偵測，排除角色扮演/討論） | 數千 → **16（0.0003%）** |
+| Yunmo 身份注入（訊息數） | 0 → **22,426** |
+
+- **殘留 16 筆**為異質性長尾（罕見措辭：「由阿里雲**提供**支援」、「我是使用 OpenAI 資料集**訓練**的」、「AI 語言模型**（Qwen）**」括號式等）；再追則 FP 風險上升，**故誠實報告殘留率 0.0003%，不宣稱歸零**。
+- **可復現性**：清理**每次從未修改的原始 `sft.jsonl` 重跑**（`SRC=sft.jsonl` → `OUT=sft_clean.jsonl` 全覆蓋），非累積式；體積僅縮 0.047%（15.70→15.69 GB），證明為外科手術式改寫而非大量刪除。
+- **pretrain 不需清理**：稽核 0 殘簡、無 minimind、老師名僅為維基條目式知識提及（非自稱），故 pretrain bin 保持原打包。
+- **tokenizer 不需重訓**：污染在資料內容非詞表，重打包即可。
 
 ---
 
