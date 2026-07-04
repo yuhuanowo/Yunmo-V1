@@ -1,45 +1,49 @@
-# Yunmo v1 — 權威技術規格（論文事實骨幹）
+# Yunmo v1 — 權威技術規格（論文事實骨幹 · 完整版）
 
-> **單一真實來源（Single Source of Truth）**。本檔全部數字皆為「實際做了什麼」的定稿值，均經程式驗證（實例化數參數、逐筆計數、打包實測、抽樣核對）。
-> 論文的 Model / Data / Training 章節請直接以本檔為準。舊的 `YUNMO_V1_PLAN.md`（原始計劃書）與 `YUNMO_DATA_STATUS.md`（資料盤點）已標為歷史，其資料策略已被本檔的「只增不減」定案取代。
->
-> 定位：**繁體台灣特化 · 全功能小語言模型 · 基於 MiniMind v3 增量復現**。最後校準 2026-07-04。
+> **單一真實來源（Single Source of Truth）**。本檔為「實際做了什麼」的完整定稿，所有數字均經程式驗證（實例化數參數、逐筆計數、打包實測、抽樣核對），並經完整聊天紀錄與所有腳本/報告交叉比對。
+> 論文的 Model / Data / Training / Limitations 章節請直接以本檔為準。舊的 `YUNMO_V1_PLAN.md`（原始計劃書）與 `YUNMO_DATA_STATUS.md`（資料盤點）已標為歷史，**其資料策略（過濾/下採樣/去重）已被本檔「只增不減」定案取代，切勿引用其數字**。
+> 定位：繁體台灣特化 · 全功能小語言模型 · 基於 MiniMind v3 增量復現。最後校準 2026-07-04。
 
 ---
 
-## 1. 定位與貢獻（誠實邊界）
+## 0. 摘要（一段話）
 
-**價值主張不是「更大所以更強」，而是「MiniMind 結構性做不到的繁體台灣特化 + 全功能復現，於較大規模」。**
+Yunmo v1 是一個**繁體台灣特化的全功能小語言模型**，方法上是 **MiniMind v3 的增量復現**：把 MiniMind 的全部訓練資料以 OpenCC `s2twp` **1:1 轉為繁體台灣用語（不丟任何一筆）**，再併入台灣原生增量（繁體維基、台灣在地指令），並重訓一個 24000 詞的繁體 tokenizer；模型在 MiniMind v3 架構上**僅加深（8→24 層）與換詞表（6400→24000）**，達 **195.4M 參數**，於 **36 小時硬算力預算**（RTX PRO 6000）內完成 pretrain + SFT。價值主張**不是「更大所以更強」**，而是「MiniMind 結構性做不到的繁體台灣在地化 + 全功能」。整體能力超越 MiniMind 是**待驗證假設**，非既成結論。
 
-MiniMind v3 是簡體源模型，結構上沒有繁體台灣的原生知識與在地語感。Yunmo v1 的貢獻：
+---
 
-| 貢獻 | 性質 |
-|---|---|
-| **繁體台灣在地知識 / 語感** | MiniMind 資料所無（wiki-zh-tw、tw-instruct 在地化增量）——核心差異化 |
-| **原生繁體 tokenizer** | vocab 24000 繁體特化 vs MiniMind 簡體 6400；繁體壓縮率大幅提升（§3） |
-| **全功能復現** | chat / 推理(`<think>`) / tool-call / 英文·code —— MiniMind 資料本身已含，1:1 轉繁全數保留 |
-| **較大規模** | 195.4M（24 層，3.05× MiniMind-3 64M）|
+## 1. 定位與貢獻（含誠實邊界）
 
-**誠實邊界（不自欺，供論文 Limitations）：**
-- 整體能力「超越 MiniMind」是**假設，須 eval 驗證**，非保證。Scaling law 下參數 ~3× 僅使 loss 降個位數百分比（冪律），非能力倍增。
-- s2twp 簡→繁轉換有少量誤轉（如 `濃鬱`→應為`濃郁` 類一對多），為扣分項，靠抽樣核對控管。
-- 最壞回退＝「繁體版 MiniMind 全功能復現」（因方法上是 MiniMind 資料 1:1 轉繁的超集）。
+| 貢獻 | 性質 | 證據等級 |
+|---|---|---|
+| 繁體台灣在地知識/語感 | MiniMind 資料結構性所無（wiki-zh-tw、tw-instruct） | 結構性差異（穩） |
+| 原生繁體 tokenizer | vocab 24000 vs MiniMind 6400；繁體 token 效率 | **已實測：少 46.4% token** |
+| 全功能復現 | chat / 推理`<think>` / tool-call / 英文·code；1:1 轉繁全保留 | 復現即得 |
+| 較大規模 | 195.4M（24 層，3.05× MiniMind-3 64M） | 已驗證 |
+| **整體能力超越 MiniMind** | **假設，須 eval 驗證** | ⚠️ 未證 |
+| 對標 Qwen3-0.6B / 中文知識碾壓 | **不現實**（同資料天花板、不同規模級） | ⚠️ 明確否定 |
+
+**誠實邊界（論文 Limitations 直接用）：**
+- 「整體超越 MiniMind」「tok/param 餵得飽」為**待訓後 eval 驗證的假設**，非結論。Scaling law 下參數 ~3× 僅使 loss 降個位數百分比（冪律），非能力倍增。
+- **最壞回退 = 繁體版 MiniMind 全功能復現**（因最終資料是 MiniMind 資料 1:1 轉繁的**超集**）——這是「不輸原版」的下限邏輯，非「保證贏」。
+- 唯一可靠的既成優勢：**TW 原生知識**（結構性）+ **實測 46% tokenizer 效率**。
+- 過擬合風險：195.4M 在固定 ~2.35B 中文 pretrain 上多輪重複，大模型更易記憶 → 靠 held-out loss / eval 早停把關。
 
 ---
 
 ## 2. 模型架構（195.4M，深而窄）
 
-架構完全沿用 MiniMind v3 的 `model/model_minimind.py`，**僅刻意改動兩處**：深度與詞表。
+架構完全沿用 MiniMind v3 的 `model/model_minimind.py`（同一份模型碼），**僅刻意改動兩處**：深度與詞表。無獨立 `config.json`／`generation_config.json`，架構由 `MiniMindConfig` 預設 + 啟動器參數決定。
 
 ```python
 MiniMindConfig(
     hidden_size          = 768,
     num_hidden_layers    = 24,      # 改動①：8→24（加深換容量）
     num_attention_heads  = 8,
-    num_key_value_heads  = 4,       # GQA 2:1
+    num_key_value_heads  = 4,       # GQA，n_rep=2
     head_dim             = 96,      # 768/8
-    intermediate_size    = 2432,    # ceil(768·π/64)·64，SwiGLU（與 MiniMind 同公式）
-    vocab_size           = 24000,   # 改動②：6400(簡)→24000(繁)
+    intermediate_size    = 2432,    # ceil(768·π/64)·64 = 38·64；SwiGLU（與 MiniMind 同公式，非自由旋鈕）
+    vocab_size           = 24000,   # 改動②：6400(簡)→24000(繁)；init 時由 len(tokenizer) 同步
     max_position_embeddings = 32768,
     rope_theta           = 1e6,
     rms_norm_eps         = 1e-6,
@@ -52,60 +56,109 @@ MiniMindConfig(
 
 | 組成 | 參數 |
 |---|---|
-| 詞嵌入（tied，24000×768） | 18.43M |
+| 詞嵌入（tied，24000×768） | 18.43M（占 ~11%） |
 | 每層 = attn 1.770M + ffn 5.603M | 7.375M |
-| 24 層合計 | 177.0M |
-| **總計** | **195.4M**（非嵌入 177.0M；3.05× MiniMind-3） |
+| 24 層合計（非嵌入） | 177.0M |
+| **總計** | **195.4M**（3.05× MiniMind-3 64M） |
 
-**繼承自 MiniMind v3（未改動）：** Pre-Norm + RMSNorm(eps 1e-6)、SwiGLU(silu)、RoPE(theta 1e6)、**QK-Norm**（q/k 每頭 RMSNorm，Qwen3 式，穩定深層）、tied embeddings、無 bias、flash-attention(SDPA)、shift-by-one CE（模型內部，ignore_index=-100）。
+**繼承自 MiniMind v3（逐項，未改動）：**
+- **Pre-Norm 殘差**：`h = x + Attn(RMSNorm(x)); h = h + MLP(RMSNorm(h))`。
+- **RMSNorm**：全域 eps **1e-6**（於 fp32 計算再轉回 dtype）。（RMSNorm class 預設 1e-5 但每處實例化都傳 1e-6。）
+- **注意力 = GQA + QK-Norm**：q_heads 8 / kv_heads 4（n_rep 2）、head_dim 96、投影無 bias。**QK-Norm = 對 q、k 每頭在 head_dim 軸做 RMSNorm（eps 1e-6），且在 RoPE 之前**；**v 不正規化**。（Qwen3 式，專為穩定較深的堆疊保留。）
+- **注意力核**：訓練/prefill 用 `F.scaled_dot_product_attention`（flash/SDPA）；增量解碼走 eager（`qk/√head_dim` + `triu(1)` 因果遮罩，softmax 於 fp32）。
+- **RoPE**：theta 1e6、rotate_half 式、max_pos 32768；**YaRN 預設關**（啟用則 factor 16 / original_max_pos 2048）。
+- **MLP = SwiGLU**：`down(silu(gate(x))·up(x))`，無 bias。
+- **tied embeddings**：`lm_head.weight` 與 `embed_tokens.weight` 共享。
+- **損失於模型內部計算**：shift-by-one CE，`x=logits[:,:-1]`、`y=labels[:,1:]`，`ignore_index=-100`；傳入 labels 與 input_ids **1:1 對齊未預移位**，模型負責移位。輸出 `MoeCausalLMOutputWithPast(loss, aux_loss, logits, ...)`。
+- **MoE（存在但未用，`use_moe=False`）**：如啟用為 4 專家 top-1、無 shared expert、Switch 式負載均衡 aux_loss、`router_aux_loss_coef=5e-4`。本專案 aux_loss=0。
 
-**設計理由（深而窄）：** 固定參數下加深優於加寬（MobileLLM, arXiv 2402.14905；MiniMind2 768/16 亦此路線）。768/24 落在 d_model 512–1536 的合理帶內。MoE 需 2–4× 資料方訓得起，資料受限故用稠密。**最小改動原則**：只動深度與詞表兩個變數 → 復現忠實、風險最低。
+**設計理由（供論文 Design 章）：**
+- **為何深而非寬（24 層）**：據 MiniMind README 引用之 **MobileLLM（arXiv 2402.14905）**——固定參數下**深度比寬度重要**，125M/350M 級 30–42 層窄堆疊於常識/QA/閱讀勝 ~12 層胖模型。MiniMind 自身 d_model/n_layers 實驗給界：**d_model < 512 傷（嵌入太窄、d_head 太小）、> 1536 則加寬優於加深** → **768 落在 [512,1536] 甜蜜帶**。先例：`minimind2`(104M) 已是 768/16 深窄；minimind-3 退回 8 層是「3 美元 2 小時」訓練速度的行銷取捨，非品質最優。24 層為 96GB/36h 算力確認後所選（MobileLLM 最優約 30–42 層，24 為保守值）。
+- **intermediate 2432**：`ceil(768·π/64)·64`，標準 SwiGLU ~π×(≈3.17×) 擴張，使 3 矩陣 SwiGLU 與 4× 香草 FFN 參數等價；hidden 固定後即固定，非自由旋鈕。
+- **為何稠密非 MoE**：MoE 需 2–4× 資料訓專家；本專案資料受限（中文 pretrain unique ~2.35B）→ 稠密最資料高效。
+- **自適應降級規則（未觸發）**：以「總曝光 = unique×epoch」判斷；僅當曝光 < ~12B 才降至 ~100M；硬上限 210M。最終曝光足夠，195.4M 成立。
 
 ---
 
 ## 3. Tokenizer（重訓，繁體特化）
 
-- **演算法**：BPE + ByteLevel（沿用 MiniMind `train_tokenizer.py` 方法），`vocab_size = 24000`，`min_frequency = 2`。
-- **訓練語料**：從已轉繁的 `yunmo/{pretrain,sft}.jsonl` 多點抽樣 ~100MB 代表性語料（含 zh/en/code）。
-- **特殊 token（36 個，完整對齊 MiniMind v3，否則 chat template / tool / think 不相容）**：
-  `<|endoftext|>`(0, pad)、`<|im_start|>`(1, bos)、`<|im_end|>`(2, eos)、`<tool_call>`(21)…`</think>`(26)、緩衝 `<|buffer1..9|>`(27–35)。ChatML 模板，支援 `tools` 渲染、`tool` role、自適應 `<think>` 注入。
-- **壓縮率（實測，char/token）**：繁中 **1.89**、英文 4.58、code 2.29、混合 2.68。於繁體台灣文本較 MiniMind 簡體 tokenizer **少用約 46% token**。
+- **演算法**：BPE + ByteLevel（`add_prefix_space=False`），沿用 MiniMind `train_tokenizer.py` 方法；`vocab_size=24000`、**`min_frequency=2`**、`initial_alphabet=ByteLevel.alphabet()`。
+- **特殊 token — 36 個（IDs 0–35，完整對齊 MiniMind v3，否則 chat template/tool/think 不相容）**：`<|endoftext|>`(0, pad/unk)、`<|im_start|>`(1, bos)、`<|im_end|>`(2, eos)、保留 3–20（object_ref/box/quad/vision/audio/tts 等）；`<tool_call>`(21)`</tool_call>`(22)`<tool_response>`(23)`</tool_response>`(24)`<think>`(25)`</think>`(26)；緩衝 `<|buffer1..9|>`(27–35)。後處理僅把 0–20 這 21 個重註冊為 special，21–35 標為非 special。
+- **tokenizer_config**：`add_bos_token=False`、`add_eos_token=False`、`add_prefix_space=False`、`model_max_length=32768`、`clean_up_tokenization_spaces=False`、`PreTrainedTokenizerFast`；完整 MiniMind ChatML `chat_template` 逐字複製。
+- **訓練語料**：~**100MB（128,819 行）**，多點偏移抽樣自已轉繁的 `yunmo/{pretrain,sft}.jsonl`（24 偏移點/檔、每行截 3000 字、丟 <5 字碎片；pretrain 70MB + sft 30MB）。
+- **訓練實測**：**34 秒**完成（tokenize 2,150,949 words、compute-merges 0→**23,708**）；最終 vocab 恰 24000、merges.txt 23,709。
+- **壓縮率（實測，字元/token）**：繁中 **1.89**、英文 4.58、code 2.29、混合 2.68。
+- **對 MiniMind 6400 tokenizer（繁體台灣文本，token 越少越好）**：4 句合計 ours=90 vs MiniMind=168 → **少 46.4% token**（單句省 +54/+41/+45/+44%）。round-trip 一致、特殊 token ID 正確、`apply_chat_template` 通過 → 生產就緒。
+- **被放棄的首次嘗試（BPE 爆炸事件）**：首版餵 ~3.96M 行/**3GB** → **5050 萬個唯一詞** → BPE compute-merges 停滯（僅 count-pairs 就 ~53 分，推估數天）。根因診斷：**MiniMind 官方 tokenizer 只用 10,000 行**（`train_tokenizer.py:15 if i>=10000: break`）——「BPE 早飽和，更多資料反而錯」。修法：語料砍到 100MB（~13× MiniMind）+ `min_frequency=2`。**論文洞見：tokenizer 不同於模型，會飽和，資料越多 ≠ 越好。**
+
+**Chat template（ChatML）行為要點：**
+- system/tools：有 tools 則渲染 `# Tools` 區塊（各工具 `tojson` 於 `<tools></tools>`）+ 呼叫格式說明；無 tools 但首訊為 system 則 `<|im_start|>system\n{content}<|im_end|>\n`。
+- assistant：**一律渲染 thinking 區塊** `<|im_start|>assistant\n<think>\n{reasoning}\n</think>\n\n{content}`；reasoning 取自 `reasoning_content` 或由 content 依 `</think>` 拆出；有 tool_calls 則附 `<tool_call>\n{...}\n</tool_call>`。
+- tool role：連續 tool 訊息包成單一 user turn，各裹 `<tool_response>...</tool_response>`。
+- 生成提示（`add_generation_prompt`）：附 `<|im_start|>assistant\n` 後，開思考則 `<think>\n`，否則空 `<think>\n\n</think>\n\n`。
 
 ---
 
 ## 4. 資料（鐵律：只增不減）
 
-> **鐵律**：資料與 MiniMind **一模一樣，只做簡→繁 + 台灣增量，不丟任何一筆**。無語言過濾、無品質過濾、無去重、無英文下採樣。
+> **鐵律**：資料與 MiniMind **一模一樣，只做簡→繁 + 台灣增量，不丟任何一筆**。無語言過濾、無品質過濾、無去重、無英文下採樣、無長樣本丟棄。
+> **起源（關鍵轉折，使用者原話）**：早期過濾管線在轉換時丟了 **753,663 筆英文（8.9%）**，使用者否決：**「保留啊 我們應該資料跟 minimind 一模一樣 只是增加 而不應該有任何減少」**。此指令回溯性廢除了整條過濾/下採樣/去重管線（見 §10）。
 
 ### 4.1 最終訓練資料（逐筆計數，非抽樣）
 
-| 檔案 | 筆數 | 打包後 token | 打包後區塊 |
-|---|---|---|---|
-| `pretrain.jsonl` | **12,157,237** | **2,353,402,018**（2.35B） | 2,298,244 × 1024 |
-| `sft.jsonl` | **5,816,011** | **3,874,644,587**（3.87B） | 1,891,916 × 2048 |
-| 合計 unique | | **~6.22B** | |
+| 檔案 | 記錄數 | 打包 token | 打包區塊 | 磁碟 |
+|---|---|---|---|---|
+| `pretrain.jsonl` | **12,157,237** | **2,353,402,018**（2.35B） | 2,298,244 × 1024 | ~10–11 GB |
+| `sft.jsonl` | **5,816,011** | **3,874,644,587**（3.87B） | 1,891,916 × 2048 | ~15 GB |
+| 合計 unique | | **~6.22B** | | |
 
 ### 4.2 血緣組成（只增不減）
 
 **pretrain（12,157,237）**
-| 來源 | 筆數 | 血緣 |
+| 來源 | 記錄數 | 血緣 |
 |---|---|---|
 | pretrain_t2t（s2twp 1:1 轉繁） | 8,468,827 | **MiniMind 本體**，零丟失 |
-| wiki-zh-tw（繁體維基） | 3,688,410 | **台灣增量** |
+| wiki-zh-tw（繁體維基） | 3,688,410 | **台灣增量**（§4.5） |
 
 **sft（5,816,011）**
-| 來源 | 筆數 | 血緣 |
+| 來源 | 記錄數 | 血緣 |
 |---|---|---|
-| sft_t2t（s2twp 1:1，tool-call/英文全留） | 5,109,432 | **MiniMind 本體**，零丟失 |
-| tw-instruct（在地化） | 486,580 | 台灣增量 |
+| sft_t2t（s2twp 1:1；tool-call/英文全留） | 5,109,432 | **MiniMind 本體**，零丟失 |
+| tw-instruct（在地化，已有繁體版） | 486,580 | 台灣增量 |
 | distill_r1（R1 推理，含 reasoning_content） | 109,999 | MiniMind 本體（用 tw/ 現成繁體版） |
-| qwen3_235b（蒸餾推理） | 110,000 | MiniMind 本體（用 tw/ 現成繁體版） |
+| qwen3_235b（235B 蒸餾推理） | 110,000 | MiniMind 本體（用 tw/ 現成繁體版） |
 
-### 4.3 轉繁方法與品質
+### 4.3 ⚠️ 重要誠實揭露（論文 Data/Limitations 必寫）
 
-- **s2twp**（OpenCC，簡體→繁體台灣化用語，phrase-level）。以 HAN regex `[一-鿿]` 判別，僅轉中文字，英文/code/結構原樣保留。
-- **1:1 轉換**：只跳過空行/不可解析行；保留 tool_calls / reasoning_content 結構，只轉其中中文內容。
-- **繁體品質（抽樣 3000 筆/檔，s2t 交叉檢測）**：偵測到 0.13% 差異，但逐一檢視全為「台灣標準字 vs 古典異體」（如 群/唇/念 我方用台標，s2t 偏好 羣/脣/唸），**非殘留簡體**；真實殘簡遠低於 0.05%，與 MiniMind 原資料同級。
+1. **SFT 語料以英文為主**：sft_t2t 5.1M 筆實測 **~86–89% 英文**（語言抽樣 en:25826 / zh-cn:4168；另一 pass en 17821 / zh-cn 2176 / zh-tw 3）。因只增不減全保留 → **最終 SFT 是多語（英文為主）+ 繁中增量**，**並非「繁中為主的 SFT」**。這是全功能復現 MiniMind 多語 SFT 的直接結果，須誠實陳述、勿誤稱繁中 SFT。
+2. **「只增不減」在 SFT 路徑有例外（畸形/不完整丟棄，非品質過濾）**：
+   - `convert_sftt2t.py`：`if not conv: return None` — 丟無 `conversations` 之記錄。
+   - `assemble` `norm_r1`：`if not inp or not ans: return None`（distill_r1 因此 110,000→**109,999**）；`norm_messages`：`if not msgs: return None`。
+   - `pack_sft_batch`：`except Exception: continue` — **靜默丟棄任何套 chat template/tokenize 出錯的對話**。
+   - **pretrain 路徑則為乾淨 1:1**（僅跳空行/壞 JSON）。
+3. **tool_calls / tools 欄位不轉繁**（保留原 JSON 避免破壞結構）→ 工具參數內若含簡體會殘留。
+4. **HAN 轉換閘只涵蓋 U+4E00–9FFF**（不含 CJK Ext-A/B、相容表意字）→ 極少數罕字略過轉換。
+5. **SFT 打包時 20% 機率注入 system prompt**（來自雙語池、含 MiniMind 身份，且部分為簡體）→ 對繁體品牌模型為**潛在污染源**，須揭露；另 80% 機率移除空 `<think>\n\n</think>\n\n` 區塊。
+
+### 4.4 轉繁方法與品質
+
+- **OpenCC `s2twp`**（簡→繁台灣化用語，phrase-level），每 worker 實例化一次；HAN regex `[一-鿿]` 判別，只轉含中文之記錄。
+- **1:1 轉換**：`conv_line` 僅於 `not line`（空行）或 `json.loads` 例外（壞行）回傳 None；其餘全留（含純英文/code/缺 text）。
+- **繁體品質（抽樣 3000 筆/檔，s2t 交叉檢測）**：偵測 0.13% 差異，但逐一檢視**全為台灣標準字 vs 古典異體**（群/唇/念 台標 vs s2t 偏好 羣/脣/唸），**非殘留簡體**；真實殘簡 < 0.05%，與 MiniMind 原資料同級。
+- **已知 s2twp 缺陷（實測 negligible）**：一對多誤轉（`濃鬱`應為`濃郁`，鬱/郁 類）；非技術語境過度在地化（对象→物件、类型→型別，實測 162k 字中物件 2/型別 15）。
+
+### 4.5 wiki-zh-tw（台灣增量，使用者自有 `WikiZH_Dataset` 專案）
+
+- **來源 dump**：`zhwiki-20260601-pages-articles.xml.bz2`（官方 3.10 GB，2026-06-01）。
+- **管線**：下載 → `wiki_parser.py` 解析 → `md_converter.py` XML→Markdown → `md_to_json.py` Markdown→JSON（OpenCC `s2twp` + pangu 中英空格）。
+- **產出**：**1,548,140 篇文章 → 3,688,410 段落條目**（每筆為一段落，非整篇），6 個 `wiki_pretrain_part1..6.json`；格式 `{"title":"主題 - 章節","text":...}`；infobox/表格/圖連結/分類皆剝除。
+- **修正的 4 個 bug（供資料品質章）**：① OpenCC 每檔重載瓶頸（1.5M 檔 2h→7h，改 per-process 快取）；② `{{%}}/{{val}}/{{pct}}` 數值模板被通用 `{{}}` 剝除致 `14%`→`14`（先還原再剝、標點清理不刪 `%`）；③ `wiki_parser.py` 反斜線殘留 `\1\2`（污染 46% markdown 檔，如 `螺（学名：\1\2Ellobium）`，修為正確 backref）；④ part 檔名雙副檔名 bug。
+- **記錄數 contradiction**：本次建置（2026-06-01 dump）= **3,688,410**；README 舊表列 3,607,037（2026-01-02 舊 HF 發布）。**v1 一律用 3,688,410。**
+
+### 4.6 資料長度分布（實測，供 seq_len 決策佐證）
+
+- pretrain_t2t：p50 269 / p90 564 / p95 651 / p99 815 / max 1459 tok（vocab6400 量）→ **512 會截半，故用 ≥1024**。
+- SFT 呈**雙峰**：指令短（tw-instruct p90≈615），推理超長（**distill_r1 p99≈7719、max≈26000**；qwen235b p99≈3370）；code p90≈3500。打包時巨型記錄（實測有 89,499、377,025 token 者）**不截斷、跨多塊保留**。
 
 ---
 
@@ -115,59 +168,115 @@ MiniMindConfig(
 
 | | Pretrain | SFT |
 |---|---|---|
-| 資料載入 | **packing**（EOS 分隔 concat 填滿，零 padding） | **packing + loss-mask**（僅 assistant 段算 loss，長對話跨塊保留） |
+| 資料載入 | **packing**（EOS 分隔 concat，零 padding） | **packing + loss-mask**（僅 assistant 段算 loss，長對話跨塊保留） |
 | seq_len | 1024 | 2048 |
 | batch × accum | 128 × 8 | 64 × 8 |
 | 有效 batch | 1,048,576 token/step | 1,048,576 token/step |
 | 峰值 lr | 3e-4 | 5e-5 |
+| epochs 上限 | 6（實際由時間封頂決定） | 6 |
+| 時間封頂（`--max_minutes`） | ~900 分（~15h） | ~1080 分（~18h） |
 | 起點 | 從頭（from_weight=none） | 接 pretrain 權重 |
 
-**共通**：AdamW、bf16、grad_clip 1.0、cos schedule `lr·(0.1+0.45·(1+cos(π·step/total)))`（峰值=lr、底=lr/10、**無 warmup**）、seed 42、`--from_resume` 斷點續訓。
+**共通**：AdamW、bf16、grad_clip 1.0、cos schedule `get_lr = lr·(0.1+0.45·(1+cos(π·step/total)))`（峰值=lr、底=lr/10、**無 warmup**）、seed 42（含分散式 rank 偏移）、`--from_resume` 斷點續訓（存 fp16 CPU state_dict + 分離的 resume bundle）。
 
-### 5.2 算力預算與曝光
+### 5.2 打包內部機制（reproducibility）
 
-- **雲端**：RTX PRO 6000（Blackwell，96GB），**36 小時硬上限**，做 pretrain + SFT。CUDA 12.8+（Blackwell sm_120）。
-- **時間封頂機制**（`--max_minutes`）：到時存檔並停止 → 保證 36h 內完成，且吞吐未知也能填滿可用時間。分配 pretrain 900 分、SFT 1080 分（前 1hr benchmark 後可調）。
-- **曝光量（依實測吞吐，時間封頂自適應）**：
+- **pretrain**：每 doc `[bos] + tokenize(text) + [eos]` → 連續 uint16 串流 `yunmo_pretrain_packed.bin`；`PackedPretrainDataset` 切 1024 塊，`labels = input_ids.clone()`（全 token 訓練，模型內部移位）。
+- **SFT**：`pre_processing_chat`（20% 注入 system prompt）→ `apply_chat_template(tools=...)` → `post_processing_chat`（80% 移空 think）→ tokenize → **assistant-only loss mask**。mask 演算法掃描 `<|im_start|>assistant\n`(bos_id) 起、至 `<|im_end|>\n`(eos_id) 止，**mask=1 涵蓋 assistant 內容含結尾 `<|im_end|>\n`、排除 `<|im_start|>assistant\n` 表頭**。輸出 `yunmo_sft_ids.bin`(uint16) + `yunmo_sft_mask.bin`(uint8)；`PackedSFTDataset` 以 `labels[~mask]=-100` 只監督 assistant。
+
+### 5.3 算力預算與曝光
+
+- **雲端**：RTX PRO 6000（Blackwell，96GB），**36 小時硬上限**，做 pretrain+SFT。CUDA 12.8+（sm_120；cu126 → no kernel image）。
+- **時間封頂機制**：到時存檔並停止 → 保證 36h 內完成，且吞吐未知也能填滿時間（前 1hr benchmark 後再分配 900/1080）。取代早期「eval 驅動 epoch」。
+- **算力換算**：有效 ~1.5e14 FLOP/s × 1.3e5 s ≈ **1.9e19 FLOPs**；`token = FLOPs/(6N)`。
+- **曝光（依吞吐，時間封頂自適應）**：
 
 | 吞吐 | pretrain（2.35B/ep） | SFT（3.87B/ep） |
 |---|---|---|
-| 保守 128k tok/s | ~2.9 epoch | ~2.1 epoch |
-| 樂觀 213k tok/s | ~4.9 epoch | ~3.6 epoch |
+| 保守 128k tok/s | ~2.9 ep | ~2.1 ep |
+| 樂觀 213k tok/s | ~4.9 ep | ~3.6 ep |
 
-  tok/param ≈ 35–59（近/超 Chinchilla 最優 20 → 餵得飽，非欠訓）。多輪重複 ≤~5 epoch 於資料受限縮放律（Muennighoff 2023）近似等值於等量 unique。
-- **本地**：RTX 4070 Ti（12GB）做 DPO / RLAIF(CISPO) / Agent RL（rollout-bound，不佔雲端計時）。
+  **tok/param ≈ 35–59**（近/超 Chinchilla 最優 20）→ 餵得飽（*待 eval 驗證*）。重複 ≤~5 epoch 於資料受限縮放律（**Muennighoff 2023**）近似等值於等量 unique。
+- **本地**：RTX 4070 Ti（12GB）做 DPO/RLAIF/Agent RL（rollout-bound，不佔雲端計時）。
 
-### 5.3 監控與模型保全（wandb）
+**設計理由：**
+- **packing**：MiniMind pretrain 為短 Q&A（avg <400 tok）padding，故用 seq 380；1024-padding 下 300-tok 樣本浪費 ~70% 算力於 pad（pad 無 loss）。我方池含 wiki 長文/長推理，380/512 會截斷。packing → 零 padding 浪費 + 保長上下文，同 FLOP 處理更多真 token（實測早期 padding 浪費 54–66%）。無 packing 則 36h 不夠（單 pretrain 2ep ~23–30h）。
+- **SFT seq 2048**：覆蓋推理 ~p80（勝 MiniMind 1350），為勝過原版推理的真槓桿；packing+跨塊 loss-mask 完整保留長對話（非早期 bucketing+丟棄）。
 
-- **指標**：loss / logits_loss / aux_loss / **grad_norm**（發散預警） / learning_rate / **tok_per_sec** / progress / tokens_seen / elapsed_min；GPU 使用率/顯存/功耗（自動）。
+### 5.4 監控與模型保全（wandb）
+
+- **指標**：loss / logits_loss / aux_loss / **grad_norm**（發散預警）/ learning_rate / **tok_per_sec** / progress / tokens_seen / elapsed_min；GPU 使用率/顯存/功耗/溫度（自動）。
 - **Config**：全超參 + 參數量 + vocab + **git_sha** + 資料塊數/token（機器回收後可完整重現）。
-- **模型保全**：中途 checkpoint 每 90 分上傳 wandb artifact（時間制 → 儲存可預測；只留最近 2 版 → 硬上限；prune 於 daemon 執行緒 → 不阻塞訓練）；階段結束自動上傳最終 `pretrain_768` / `full_sft_768`。防雲端機器回收造成模型遺失。
+- **模型保全**：雲端機器用後回收 → 中途 checkpoint 每 90 分（`CKPT_MIN`）上傳 wandb artifact，**時間制（非步數）→ 儲存可預測**，只留最近 2 版（`CKPT_KEEP`，~2×408MB），prune 於 **daemon 執行緒 → 不阻塞訓練**；階段結束自動上傳 `pretrain_768` / `full_sft_768`。
+- **環境釘版**：`transformers==4.57.6`、`trl==0.13.0`、**`huggingface_hub[hf_transfer]<1.0`**（hub 1.x 破 transformers 4.57 import）。repo `github.com/yuhuanowo/minimind`(master)；packed bin 經私有 HF dataset `yuhuanowo/yunmo-v1-packed` 中轉（~15.2GB）。
 
 ---
 
-## 6. 復現性
+## 6. 下游對齊（本地 4070 Ti，不佔 36h）
 
-- 程式碼、tokenizer、config 全部在 repo（`github.com/yuhuanowo/minimind`，branch master）；packed bin 經 HuggingFace dataset 中轉。
-- 每次 wandb run 記錄 git_sha + 完整超參 → 可精確重現。
-- 隨機種子 42（含分散式 rank 偏移）。
+沿用 MiniMind 已驗證腳本預設：
+| 階段 | 資料 | 關鍵超參 | 備註 |
+|---|---|---|---|
+| DPO | `dpo.jsonl`(s2twp) | lr **4e-8**、β **0.15**、seq 1024 | 凍結 ref |
+| RLAIF **CISPO** | `rlaif.jsonl` | lr **3e-7**、num_generations **6**、β **0.1** | **需外部 reward `InternLM2-1.8B-Reward`**（bf16 ~3.6GB，12GB 吃緊可跑）；MiniMind RL 預設 loss_type=**CISPO** 非 GRPO |
+| Agent RL | `agent_rl*.jsonl` | lr 3e-7、max_total 2500、thinking_ratio 0.1 | tool-use，可選 |
+
+RL 資料由 SFT 資料衍生（末個 assistant 留空供 rollout）。
 
 ---
 
-## 7. 評估（規劃，待訓後執行）
+## 7. 評估（規劃，訓後執行）
 
 - **對照**：MiniMind v3 官方權重（下限脊柱）+ Yunmo v1 各階段 checkpoint。
-- **客觀**：lm-evaluation-harness，MiniMind 7 項（C-Eval / CMMLU / ARC-Easy / PIQA / OpenBookQA / HellaSwag / Social-IQa），對數概率法；另切**繁中獨立 eval 集**（不進訓練）量繁中知識/推理。
-- **功能**：繁中對話 + tool-call + `<think>` 推理品質。
+- **客觀**：`lm-evaluation-harness`，MiniMind 7 項——**C-Eval / CMMLU / ARC-Easy / PIQA / OpenBookQA / HellaSwag / Social-IQa**，對數概率法（非自由生成）；另切**繁中獨立 eval 集**（不進訓練）量繁中知識/推理。**唯 eval 集須與訓練集獨立**。
+- **功能**：繁中對話（`eval_llm.py`）+ tool-call（`eval_toolcall.py`）+ `<think>` 推理品質。
+
+---
+
+## 8. 復現性總表
+
+| 項目 | 值 |
+|---|---|
+| Repo / branch | github.com/yuhuanowo/minimind / master |
+| 資料中轉 | HF dataset `yuhuanowo/yunmo-v1-packed`（private） |
+| seed | 42（+ rank 偏移） |
+| 每 run 記錄 | git_sha + 全超參（wandb config） |
+| tokenizer | 24000 vocab / 23,708 merges / 36 special |
+| 打包 meta | `yunmo_pack_meta.json`（file/tokens/seq_len/blocks） |
 
 ---
 
 ## 附錄 A. MiniMind v3 權威參照（原碼交叉核對）
 
-> MiniMind 的圖、argparse、README 三者數值已漂移，不可盲抄。以下為 `model/model_minimind.py` 原碼交叉核對後的權威值。
+> MiniMind 的圖、argparse、README 三者數值已漂移，不可盲抄；以下為 `model_minimind.py` 原碼權威值。
 
-**架構權威值（minimind-3, 64M）**：hidden 768 / layers 8 / q_heads 8 / kv_heads 4 / head_dim 96 / vocab 6400 / intermediate 2432 / rope_theta 1e6 / max_pos 32768 / tie True / QK-Norm(q,k 每頭 RMSNorm) / RMSNorm eps 1e-6 / SwiGLU。
+**架構權威值（minimind-3, 64M）**：hidden 768 / layers 8 / q_heads 8 / kv_heads 4 / head_dim 96 / vocab 6400 / intermediate 2432 / rope_theta 1e6 / max_pos 32768 / tie True / QK-Norm / RMSNorm eps 1e-6 / SwiGLU。MoE 版：4 專家 top-1、無 shared expert、aux_coef 5e-4。
 
-**已知內部不一致（擇要）**：pretrain lr argparse 5e-4 vs 圖 1e-4；full epochs 5 vs argparse 2；SFT seq_len full 1350 vs argparse 768；RMSNorm eps config 1e-6 vs class 1e-5(未用)；max_pos 32768 vs tokenizer 131072。**Yunmo 一律以原碼權威值 + 自身實測為準。**
+**權威配方（proven baseline，供對照）**：Pretrain 5ep/seq380/padding；SFT 5ep/seq1350/padding；DPO/RLAIF(CISPO)/AgentRL 各 1ep。共通 AdamW/bf16/grad_clip1.0/同 cos schedule。SFT loss 僅算 assistant；20% 注入 system prompt；~80% 移空 think。
 
-**MiniMind v3 權威配方（proven baseline，供對照）**：Pretrain 5 epoch / seq 380 / padding；SFT 5 epoch / seq 1350 / padding；DPO 1 epoch；RLAIF(CISPO) + Agent RL 各 1 epoch。共通 AdamW / bf16 / grad_clip 1.0 / 同 cos schedule。**Yunmo 差異**：pretrain 改 packing+1024、SFT 改 packing+2048、epoch 改時間封頂自適應。
+**已知 12 處內部不一致（擇要）**：pretrain lr argparse 5e-4 vs 圖 1e-4；full epochs 5(dataset.jpg) vs argparse 2；SFT seq_len full 1350 vs argparse 768；DPO β 0.15 vs code 0.1(dead)；RMSNorm eps config 1e-6 vs class 1e-5(未用)；max_pos 32768 vs tokenizer 131072 vs YaRN orig 2048；MoE 標註 198M-A64M / 198M / 0.2B-A0.06B 混用。**Yunmo 一律以原碼權威值 + 自身實測為準。**
+
+---
+
+## 附錄 B. 演變史與被放棄的方案（供論文 Design/Ablation 敘事）
+
+| 主題 | 早期（計劃書，已放棄） | 最終（實際） | 觸發原因 |
+|---|---|---|---|
+| 模型 | 166M/20層（另有 32K vocab、12層/kv2 變體構想） | **195.4M/24層** | 96GB/36h 確認後選 24；先估 185M，實測 195.4M |
+| 資料策略 | 過濾 + 英文下採樣 + MinHash-LSH 跨集去重 + 丟長推理 + 棄舊散檔 | **只增不減（1:1 全留）** | 使用者「保留啊…不應有任何減少」；dropEN 753,663 事件 |
+| token 數 | char 估 ~2–3B → 抽樣估 4.27B/5.85B | **打包實測 2.35B/3.87B** | 抽樣被巨型離群記錄（89k–377k tok）灌爆均值 |
+| pretrain=SFT 同池假設 | 假設同內容 | **證偽**：pretrain_t2t 99%中文、sft_t2t 86%英文，非同池 | 實測語言分布 |
+| epoch | 「少 epoch」（誤以為 10B unique） | 高 epoch → **時間封頂自適應** | 實測中文僅 ~2.35B ≈ MiniMind 2.2B |
+| SFT seq/載入 | 1350→1024，padding+bucketing+丟>2048 | **2048 + packing + 跨塊 loss-mask（不丟）** | 只增不減 + packing |
+| SFT lr | 1e-5 | **5e-5** | — |
+| tokenizer | 3GB 語料（OOM，5050 萬唯一詞） | **100MB（34 秒成功）** | BPE 早飽和，MiniMind 只用 10k 行 |
+| 去重 | 跨集去重（stage2 抽樣測重疊率 26.8%） | **不去重**（只增不減下無意義） | 鐵律 |
+| DPO/RL | 早期規劃 | 不變（本地 4070Ti） | — |
+
+**被放棄的資料元件**：FineWeb-Edu（英文過剩）、Magicoder / py18k / code.jsonl 額外 code、舊 v0.x 散檔 sft_512/1024/2048、cn/tw pretrain 重複版。**注意**：`stage1_stats.json` / `measure_char.txt` / `measure_real.txt` / `stage2_overlap_report.txt` 等實測報告皆屬**此被放棄的過濾管線**（含 dropEN/去重/品質過濾），僅為「促成決策的前期資料分析（EDA）」，**不代表最終資料**——最終資料走 1:1 轉換。
+
+---
+
+## 附錄 C. 一句話誠實聲明（貼進論文）
+
+> Yunmo v1 **確定達成**：繁體台灣特化的全功能小 MiniMind 復現、**實測 46% 更高的繁體 tokenizer 效率**、MiniMind 結構性所無的台灣原生知識注入。**尚待 eval 驗證（不可預先聲稱為結論）**：整體能力對 MiniMind 的超越、195.4M 於此資料量下的訓練充分度。
