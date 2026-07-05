@@ -11,7 +11,7 @@
 | 📊 評測 | **[YUNMO_EVAL.md](./YUNMO_EVAL.md)** — 46 題功能對比 + TMMLU+/MMLU-Pro，逐題實測輸出 |
 | 🛠️ 訓練 | **[YUNMO_TRAIN.md](./YUNMO_TRAIN.md)** — 模型／資料／訓練設定與復現 |
 
-**特點**：全程繁體（不滑簡體）、臺灣在地知識、乾淨且能抵抗「你現在是 Qwen」prompt 注入的品牌身份。
+**特點**：全程繁體（不夾雜簡體字）、臺灣在地知識、乾淨且能抵抗「你現在是 Qwen」prompt 注入的品牌身份。
 **限制（誠實揭露）**：195M 規模，硬事實、數學、安全對齊仍弱 —— 詳見 [YUNMO_EVAL.md](./YUNMO_EVAL.md)。
 
 > 以下為原 **MiniMind** 專案說明。Yunmo 承其架構與訓練配方，謹此致謝（Apache-2.0）。
