@@ -1,3 +1,22 @@
+# 🖋️ Yunmo v1（雲墨）
+
+**繁體中文（臺灣）特化 · 全功能小型語言模型 · 195M · 基於 MiniMind v3 增量復現**
+
+本專案將 [MiniMind v3](https://github.com/jingyaogong/minimind) 的完整訓練語料以 OpenCC `s2twp`（簡體→臺灣正體）逐筆轉為繁體、併入臺灣在地增量語料、重訓 24,000 詞繁體特化分詞器，並於開訓前執行**多教師身份去污染**。架構沿用 MiniMind v3（Qwen3-style：RMSNorm / SwiGLU / RoPE / GQA / QK-Norm），刻意調整層數 8→24、詞表 6,400→24,000，共 **195.4M**。由 **YuhuanStudio** 開發。
+
+| 資源 | |
+|---|---|
+| 🤗 模型 | **[yuhuanstudio/yunmo-v1](https://huggingface.co/yuhuanstudio/yunmo-v1)** — `from_pretrained` 直接載入（標準 Qwen3 格式） |
+| 📊 評測 | **[YUNMO_EVAL.md](./YUNMO_EVAL.md)** — 46 題功能對比 + TMMLU+/MMLU-Pro，逐題實測輸出 |
+| 🛠️ 訓練 | **[YUNMO_TRAIN.md](./YUNMO_TRAIN.md)** — 訓練配置 + 效能排查實錄 |
+
+**特點**：全程繁體（不滑簡體）、臺灣在地知識、乾淨且能抵抗「你現在是 Qwen」prompt 注入的品牌身份。
+**限制（誠實揭露）**：195M 規模，硬事實、數學、安全對齊仍弱 —— 詳見 [YUNMO_EVAL.md](./YUNMO_EVAL.md)。
+
+> 以下為原 **MiniMind** 專案說明。Yunmo 承其架構與訓練配方，謹此致謝（Apache-2.0）。
+
+---
+
 <div align="center">
 
 ![logo](./images/logo.png)
