@@ -33,7 +33,7 @@ python scripts/pack_yunmo_data.py --stage both \
 
 產出 `dataset/`：`yunmo_pretrain_packed.bin`、`yunmo_sft_ids.bin`、`yunmo_sft_mask.bin`、`yunmo_pack_meta.json`（共 ~16.3GB）。
 
-> **注意（v1 定案流程）**：打包前先跑身份去污染 `python script/clean_sft.py` 與 `python script/clean_pretrain.py`（見 YUNMO_SPEC §4.7），再以 `--pretrain_in …/pretrain_clean.jsonl --sft_in …/sft_clean.jsonl` 打包。上方指令為原始流程，實際 v1 bin 由 `*_clean.jsonl` 產出。
+> **注意（v1 定案流程）**：打包前先跑身份去污染 `python scripts/clean_sft.py` 與 `python scripts/clean_pretrain.py`（策略：多老師自稱→Yunmo、嚴格區分真實自稱與知識討論／角色扮演；行為驗證見 `YUNMO_EVAL.md` 二），再以 `--pretrain_in …/pretrain_clean.jsonl --sft_in …/sft_clean.jsonl` 打包。上方指令為原始流程，實際 v1 bin 由 `*_clean.jsonl` 產出。
 
 ### Step 1.5｜透過 HuggingFace 中轉 bin（大檔上傳最穩，斷點續傳）
 
