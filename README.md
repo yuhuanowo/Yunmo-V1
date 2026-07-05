@@ -4,7 +4,7 @@
 
 本專案將 [MiniMind v3](https://github.com/jingyaogong/minimind) 的完整訓練語料以 OpenCC `s2twp`（簡體→臺灣正體）逐筆轉為繁體、併入臺灣在地增量語料、重訓 24,000 詞繁體特化分詞器，並於開訓前執行**多教師身份去污染**。架構沿用 MiniMind v3（Qwen3-style：RMSNorm / SwiGLU / RoPE / GQA / QK-Norm），刻意調整層數 8→24、詞表 6,400→24,000，共 **195.4M**。**權重為隨機初始化、從零訓練，非自 minimind-3 微調。**由 **YuhuanStudio** 開發。
 
-| 資源 | |
+| 資源 | 連結 |
 |---|---|
 | 🤗 模型 | **[yuhuanstudio/yunmo-v1](https://huggingface.co/yuhuanstudio/yunmo-v1)** — `from_pretrained` 直接載入（標準 Qwen3 格式） |
 | 📚 資料 | [jingyaogong/minimind_dataset](https://huggingface.co/datasets/jingyaogong/minimind_dataset)（上游語料，轉繁前）＋ [yuhuanstudio/wikipedia-pretrain-zh-tw](https://huggingface.co/datasets/yuhuanstudio/wikipedia-pretrain-zh-tw)（台灣正體維基 pretrain 增量） |
