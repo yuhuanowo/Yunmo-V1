@@ -12,3 +12,4 @@ wandb/
 trainer/wandb/
 *.pth
 release/
+YUNMO_INTERNAL.md
