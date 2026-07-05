@@ -10,3 +10,5 @@ dataset/yunmo_pack_meta.json
 checkpoints/
 wandb/
 trainer/wandb/
+*.pth
+release/

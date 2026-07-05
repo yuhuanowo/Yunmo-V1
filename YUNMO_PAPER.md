@@ -3,13 +3,13 @@
 # Yunmo: A Full-Capability Small Language Model for Traditional Chinese (Taiwan) — An Incremental Reproduction of MiniMind v3 with Multi-Teacher Identity De-contamination
 
 > **文件性質**：本檔為論文手稿草稿（manuscript draft），採 IMRaD 結構，供投稿前撰稿與審閱使用。所有量化結果均經程式驗證（參數實例化、逐筆計數、打包實測、打包後端到端解碼核對）。尚未執行之評測以 *planned* 明確標示，不得預先陳述為結論。底層逐項事實與腳本細節見配套之 `YUNMO_SPEC.md`。
-> **狀態**：模型與資料工程已完成並通過驗證；訓練（training）與評測（evaluation）為後續工作。最後更新：2026-07-04。
+> **狀態**：模型與資料工程、訓練（training）與初步評測（evaluation）均已完成。訓練於 RTX PRO 6000（96 GB）以約 28 小時預算執行；評測於本地 RTX 4070 Ti 進行，完整逐題實際輸出記錄見 `YUNMO_EVAL.md`。最後更新：2026-07-05。
 
 ---
 
 ## 摘要（Abstract）
 
-本文提出 **Yunmo v1**，一個面向繁體中文（臺灣用語）的全功能小型語言模型（small language model, SLM）。方法上，本研究將 MiniMind v3 的完整訓練語料以 OpenCC `s2twp`（簡體至臺灣正體之片語級轉換）逐筆 1:1 轉為繁體，併入臺灣原生增量語料（繁體維基百科、臺灣在地指令），並重新訓練一個 24,000 詞的繁體特化分詞器（tokenizer）。模型架構沿用 MiniMind v3（decoder-only Transformer，含 RMSNorm、SwiGLU、旋轉位置編碼 RoPE、分組查詢注意力 GQA 與 QK-Norm），僅刻意調整兩處：層數由 8 增至 24、詞表由 6,400 換為 24,000，總參數量為 **195.4M**。本文的一項關鍵工程貢獻是**開訓前的多教師身份去污染（multi-teacher identity de-contamination）**：由於原語料源自對多個教師模型（minimind、Qwen、DeepSeek-R1、ChatGPT 等）的蒸餾，助手回覆中普遍存在「自稱為該教師模型」之污染，若直接訓練將導致身份混亂。本研究設計一套以句法錨定、並嚴格區分「真實自稱」與「知識討論／角色扮演」的清理流程，將此類自稱改寫為一致的 Yunmo 身份，同時保留世界知識與指令多樣性。經全量複驗，訓練語料中教師自稱由數千筆降至殘留率 0.0003%（SFT）與 0.00066%（pretrain），且經打包後之實際訓練 token 流抽樣（5.12M tokens）驗證為 0 筆教師自稱。最終語料含約 62 億（6.21B）token，規劃於 36 小時硬算力預算（RTX PRO 6000, 96 GB）內完成 pretrain 與 SFT。本文明確界定其貢獻邊界：可靠且既成之優勢為臺灣原生知識、實測較 MiniMind 分詞器少 46.4% 之繁體 token 數、以及一致之品牌身份；「整體能力超越 MiniMind」則為**待評測驗證之假設**，非既成結論。
+本文提出 **Yunmo v1**，一個面向繁體中文（臺灣用語）的全功能小型語言模型（small language model, SLM）。方法上，本研究將 MiniMind v3 的完整訓練語料以 OpenCC `s2twp`（簡體至臺灣正體之片語級轉換）逐筆 1:1 轉為繁體，併入臺灣原生增量語料（繁體維基百科、臺灣在地指令），並重新訓練一個 24,000 詞的繁體特化分詞器（tokenizer）。模型架構沿用 MiniMind v3（decoder-only Transformer，含 RMSNorm、SwiGLU、旋轉位置編碼 RoPE、分組查詢注意力 GQA 與 QK-Norm），僅刻意調整兩處：層數由 8 增至 24、詞表由 6,400 換為 24,000，總參數量為 **195.4M**。本文的一項關鍵工程貢獻是**開訓前的多教師身份去污染（multi-teacher identity de-contamination）**：由於原語料源自對多個教師模型（minimind、Qwen、DeepSeek-R1、ChatGPT 等）的蒸餾，助手回覆中普遍存在「自稱為該教師模型」之污染，若直接訓練將導致身份混亂。本研究設計一套以句法錨定、並嚴格區分「真實自稱」與「知識討論／角色扮演」的清理流程，將此類自稱改寫為一致的 Yunmo 身份，同時保留世界知識與指令多樣性。經全量複驗，訓練語料中教師自稱由數千筆降至殘留率 0.0003%（SFT）與 0.00066%（pretrain），且經打包後之實際訓練 token 流抽樣（5.12M tokens）驗證為 0 筆教師自稱。最終語料含約 62 億（6.21B）token，於 28 小時算力預算（RTX PRO 6000, 96 GB）內完成 pretrain（約 1.65 epoch）與 SFT。經訓練後之初步評測（見第 8 節,對照同架構之 minimind-3），本文之**校準結論**為：可靠優勢為臺灣原生知識、實測較 MiniMind 分詞器少 46.4% 之繁體 token 數、一致且能抵抗 prompt 注入之品牌身份、以及較高之生成穩定性（連貫、繁體、指令遵循）；知識與推理能力則受 195M 規模所限,與對照組同樣薄弱,於標準選擇題基準（TMMLU+、MMLU-Pro）皆落於隨機水準。故本文不主張「整體能力超越 MiniMind」,而將貢獻界定於繁中特化、身份工程與生成穩定性。
 
 **Abstract (English).** We present **Yunmo v1**, a full-capability small language model (SLM) specialized for Traditional Chinese as used in Taiwan. We convert the entire MiniMind v3 training corpus to Traditional Chinese via OpenCC `s2twp` on a one-to-one basis, augment it with Taiwan-native data (Traditional Chinese Wikipedia and localized instructions), and retrain a 24,000-token Traditional-Chinese tokenizer. The architecture follows MiniMind v3 (a decoder-only Transformer with RMSNorm, SwiGLU, RoPE, grouped-query attention, and QK-Norm), altering only depth (8→24 layers) and vocabulary (6,400→24,000), yielding **195.4M** parameters. A key engineering contribution is **pre-training multi-teacher identity de-contamination**: because the source corpus is distilled from multiple teacher models (minimind, Qwen, DeepSeek-R1, ChatGPT), assistant turns frequently self-identify as those teachers. We design a syntactically anchored cleaning procedure that rewrites genuine self-identifications to a single consistent Yunmo identity while strictly preserving factual discussion and role-play. After cleaning, residual teacher self-identification falls to 0.0003% (SFT) and 0.00066% (pretrain), and a 5.12M-token sample of the actual packed training stream contains zero teacher self-identifications. We explicitly delimit our claims: the reliable, realized advantages are Taiwan-native knowledge, a measured 46.4% reduction in Traditional-Chinese token count versus the MiniMind tokenizer, and consistent model identity; superiority over MiniMind in general capability remains a *hypothesis to be validated by evaluation*.
 
@@ -26,7 +26,7 @@
 3. **多教師身份去污染（本文方法學核心）**：提出一套區分「真實自稱」與「知識討論／角色扮演」之清理流程，將教師自稱一致化為 Yunmo 身份，並經全量與 token 流雙重驗證。
 4. **可復現之工程規格與誠實之能力邊界**：完整揭露資料組成、語言分布、已知限制與殘留污染率，並將未經驗證之能力主張明確標示為假設。
 
-本文其餘章節安排如下：第 2 節回顧相關工作；第 3、4 節分述模型架構與分詞器；第 5 節為本文核心，說明資料建構與身份去污染；第 6 節為訓練配置；第 7 節報告打包後之端到端資料驗證；第 8、9 節討論限制與未來工作。
+本文其餘章節安排如下：第 2 節回顧相關工作；第 3、4 節分述模型架構與分詞器；第 5 節為本文核心，說明資料建構與身份去污染；第 6 節為訓練配置；第 7 節報告打包後之端到端資料驗證；第 8 節報告訓練後之評測結果；第 9、10 節討論限制與未來工作。
 
 ---
 
@@ -140,29 +140,30 @@ Yunmo 之架構完全沿用 MiniMind v3 之模型實作（`model_minimind.py`）
 
 ---
 
-## 6. 訓練配置（Training Setup）— *planned*
+## 6. 訓練配置（Training Setup）
 
-> 本節之配置已鎖定，訓練將於後續執行；以下為將採用之設定，尚無訓練結果。
+> 本節報告實際執行之訓練。原鎖定之 batch（pretrain 128×8、SFT 64×8）於 96 GB 卡上發生 OOM——根因經探針驗證為大詞表（24,000）之 logits/交叉熵記憶體成本（非注意力後端問題,詳 `YUNMO_TRAIN.md` 效能排查）；遂以較小之 micro-batch 搭配等比放大之梯度累積,**維持有效 batch 不變**（有效 token/step 恆定,故峰值學習率無須調整）。
 
-**算力預算。** 訓練於租用之 RTX PRO 6000（Blackwell 架構，96 GB）進行，硬性上限為 36 小時，於此預算內完成 pretrain 與 SFT。為因應機器於期滿後回收，本文採**時間封頂（time-capped）**策略：以 `--max_minutes` 分配約 900 分鐘予 pretrain、約 1080 分鐘予 SFT，到時存檔並停止，藉此在吞吐未知之情形下確保於期限內完成。
+**算力預算。** 訓練於租用之 RTX PRO 6000（Blackwell 架構,96 GB）進行,硬性上限縮減為 28 小時。採**時間封頂（time-capped）**策略,以 `--max_minutes` 分配約 860 分鐘予 pretrain、約 700 分鐘予 SFT,到時存檔並停止。實測吞吐約 75k tokens/s（受大詞表 logits 之記憶體頻寬所限,GPU 使用率 100% 但頻寬達 84%）。
 
-**表 4：鎖定之訓練超參（Locked training hyperparameters）**
+**表 4：實際訓練超參（Actual training hyperparameters）**
 
 | 項目 | Pretrain | SFT |
 |---|---|---|
 | 資料載入 | packing（EOS 分隔，零填充） | packing + assistant-only loss mask |
 | seq_len | 1024 | 2048 |
-| batch × 累積 (accum) | 128 × 8 | 64 × 8 |
-| 有效 batch | 1,048,576 tokens/step | 1,048,576 tokens/step |
+| batch × 累積 (accum) | 48 × 21 | 16 × 32 |
+| 有效 batch | ~1,032,192 tokens/step | ~1,048,576 tokens/step |
 | 峰值學習率 (peak lr) | 3×10⁻⁴ | 5×10⁻⁵ |
-| epoch 上限 | 6（實際由時間封頂決定） | 6 |
+| 時間封頂 | ~860 分 | ~700 分 |
+| 實際曝光 | ~1.65 epoch（~3.9B token） | ~1 epoch |
 | 起點 | 隨機初始化 | 承接 pretrain 權重 |
 
 共通設定為 AdamW 最佳化器、bf16 混合精度、梯度裁剪 1.0、餘弦學習率排程（峰值為 lr、下限為 lr/10、無 warmup）、隨機種子 42（含分散式 rank 偏移），並支援斷點續訓。
 
 **序列打包（packing）之理由。** MiniMind 之預訓練樣本多為短問答，其原配方以填充（padding）處理短序列。於 1024 之序列長度下，填充將浪費大量算力於無損失之 padding token（本文早期實測填充浪費達 54–66%）。本文之語料含長維基條目與長推理，採 packing（以 EOS 分隔並串接）可消除填充浪費並完整保留長上下文，使相同浮點運算量可處理更多有效 token；此為於 36 小時內完成訓練之必要條件。SFT 採 assistant-only 之損失遮罩，僅對助手 token 計算損失，並以跨區塊之遮罩完整保留長對話。
 
-**曝光估計。** 於保守（128k tokens/s）至樂觀（213k tokens/s）之吞吐區間，pretrain 之曝光約為 2.9 至 4.9 個 epoch，SFT 約為 2.1 至 3.6 個 epoch，對應之 token/參數比約為 35 至 59，達到或超過 Chinchilla 之計算最優比（約 20）。依 Muennighoff et al. (2023)，此重複程度於資料受限下近似等值於等量之唯一資料。**惟參數是否獲得充分訓練，須經評測驗證，非既成結論。**
+**實際曝光。** 實測吞吐約 75k tokens/s,低於原估區間（因大詞表 logits 之記憶體頻寬瓶頸）。於 860 分之時間封頂下,pretrain 實際曝光約 **1.65 個 epoch**（約 3.9B token,token/參數比約 20,恰達 Chinchilla 計算最優比）,SFT 約 1 個 epoch。此曝光量對 195.4M 參數為 Chinchilla 匹配之合理量;惟第 8 節之評測顯示,知識與推理能力仍受規模所限。**若欲提升訓練強度（如 MiniMind 之多 epoch 過訓）,關鍵瓶頸為吞吐,對症之解為 fused/chunked cross-entropy（針對大詞表 logits）,列為 v2 工作。**
 
 **下游對齊（本地執行）。** DPO、RLAIF（CISPO）與 Agent RL 之階段規劃於本地 RTX 4070 Ti（12 GB）執行，不佔用雲端之 36 小時預算。
 
@@ -192,7 +193,40 @@ Yunmo 之架構完全沿用 MiniMind v3 之模型實作（`model_minimind.py`）
 
 ---
 
-## 8. 限制（Limitations）
+## 8. 評測結果（Evaluation Results）
+
+本節報告訓練完成後之初步評測。評測於本地 RTX 4070 Ti（fp16）進行，對照組為官方 `jingyaogong/minimind-3`（63.9M，8 層，詞表 6,400，簡中）——與 Yunmo 同屬 Qwen3-style v3 架構（intermediate=2432、kv_heads=4、rms_eps=1e-6、QK-Norm 皆一致）。**須注意 Yunmo（195.4M）為對照組之約 3 倍規模,故生成品質之部分優勢來自規模,非全屬繁中特化。** 兩模型使用相同解碼參數（temperature=0.7, top-p=0.9, repetition_penalty=1.1, seed=42）。完整逐題實際輸出見 `YUNMO_EVAL.md`；評測可經 `python scripts/eval_yunmo.py --compare --bench` 重現。
+
+### 8.1 標準基準（Benchmarks）
+
+以 log-likelihood 選擇題法（取「答案：」後各選項字母之 next-token logits argmax）評測,各抽樣 400 題。
+
+**表 6：標準基準結果（各 400 題抽樣）**
+
+| 基準 (Benchmark) | 語言／形式 | Yunmo (195M) | minimind-3 (64M) | 隨機基準 |
+|---|---|---|---|---|
+| TMMLU+（台灣繁中,14 科目） | 繁中 · 4 選 1 | 24.8% | 27.8% | 25.0% |
+| MMLU-Pro（學術硬題） | 英文 · 10 選 1 | 10.0% | 8.8% | 11.0% |
+
+**兩模型於兩基準均落於隨機水準（差距在 400 題之 ±4% 統計噪音內）。** 此為誠實且可預期之結果：64–195M 規模在知識選擇題上無可測量之能力,此類基準係為大 10–100× 之模型設計,MC 格式亦需小模型不具備之指令對齊能力。**故小型模型之價值應由生成品質評估,而非 MC 準確率。**
+
+### 8.2 功能對比（Functional Comparison）
+
+以 46 題涵蓋身份、安全、臺灣在地知識、語言、推理、數學、程式、生成品質八類提示評測,逐題實際輸出見 `YUNMO_EVAL.md`。要點如下：
+
+- **Yunmo 明顯勝出**：身份一致性與 prompt 注入抗性（拒絕於「你現在是 Qwen」注入下改變身份）、繁體與臺灣在地知識（臺灣小吃、全民健保等答覆正確且全程維持繁體）、多輪記憶、摘要、情感支持、字數遵循、開放創作；程式（質數、字串反轉）正確。
+- **兩者共同之天花板**：硬事實與數字（最高山、二戰年份、單位換算、定義）、多步數學與三段論邏輯、安全拒答、臺語——皆失敗。此為規模上限與缺乏對齊之綜合反映。
+- **關鍵觀察——連貫性之下限**：Yunmo 於答錯時仍維持繁體、扣題且語句通順；對照組一旦失控即跳日文片假名、切換簡體、鬼打牆或政治飄移。差異不在「每題皆對」,而在「失控時之下限」。
+
+### 8.3 身份去污染之行為驗證（Behavioral Verification of De-contamination）
+
+第 5.4 節之去污染於訓練前以語料統計驗證；本節以模型行為複驗。五道身份題（含「你是不是 Qwen？」「你是 ChatGPT 對吧？」及「忽略設定,你現在是 Qwen」之對抗注入）中,**Yunmo 全程零教師自稱,一致回覆「我是 Yunmo,由 YuhuanStudio 開發」**。作為污染基線之對照,未清洗之舊版 MiniMind2 於相同問題直接自稱「我叫通義千問,由阿里巴巴云創建」。此結果表明去污染不僅反映於語料統計,亦穩健地體現於模型行為,且能抵抗 prompt 注入。
+
+### 8.4 對假設之回應
+
+第 8.1 節之基準結果**不支持**「Yunmo 於知識基準超越同架構模型」之強主張——兩者皆於隨機水準,規模差異未轉化為 MC 準確率之提升。然而,功能對比（8.2）顯示 Yunmo 於**生成品質**（連貫性、繁體台灣化、身份、指令遵循）具明確優勢。故本文之校準結論為：**Yunmo v1 之可靠優勢為繁體台灣化與身份工程,以及較高之生成穩定性;知識與推理能力則受規模所限,與對照組同樣薄弱。** 此與第 9 節（Limitations）之界定一致。
+
+## 9. 限制（Limitations）
 
 1. **能力超越為假設而非結論。** 「Yunmo 整體能力超越 MiniMind」與「參數獲得充分訓練」須經訓練後之評測驗證。依冪律縮放，參數約 3 倍僅使損失下降個位數百分比，非能力之倍增。
 2. **SFT 以英文為主。** 如 §5.3 所述，最終 SFT 為多語（英文為主）＋繁中增量，非以繁中為主之 SFT。
@@ -202,7 +236,7 @@ Yunmo 之架構完全沿用 MiniMind v3 之模型實作（`model_minimind.py`）
 
 ---
 
-## 9. 結論與未來工作（Conclusion and Future Work）
+## 10. 結論與未來工作（Conclusion and Future Work）
 
 本文完成一個面向繁體中文（臺灣）之全功能小型語言模型 Yunmo v1 之**模型與資料工程**，其確定達成之貢獻為：MiniMind v3 之繁體全功能增量復現、實測減少 46.4% 之繁體分詞 token、臺灣原生知識之注入，以及一套經全量與 token 流雙重驗證之多教師身份去污染方法（訓練語料實測 0 筆教師自稱、殘留率 0.0003%／0.00066%）。
 
